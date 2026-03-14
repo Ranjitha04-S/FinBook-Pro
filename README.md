@@ -1,4 +1,4 @@
-# SR Finance — Full Stack MERN Application
+# FinBook Pro — Full Stack MERN Application
 
 A professional mobile-first finance management system for tracking Finance and Vatti loans.
 
