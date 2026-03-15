@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const jwt = require('jsonwebtoken');
 
-const ADMIN = { username: 'admin', password: 'srfinance2024' };
+const ADMIN = { username: 'sudhan', password: 'Sudhan@21' };
 const SECRET = process.env.JWT_SECRET || 'srfinance_secret_key';
 
 router.post('/login', (req, res) => {

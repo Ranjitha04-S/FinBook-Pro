@@ -235,20 +235,24 @@ router.put('/:id', async (req, res) => {
   }
 });
 
-// DELETE customer — only closed accounts, requires confirmation PIN
+// DELETE customer — closed accounts use PIN: DELETE2024, active accounts use FORCE2024
 router.delete('/:id', async (req, res) => {
   try {
     const { pin } = req.body;
-    // Secure deletion PIN
-    if (pin !== 'DELETE2024') {
-      return res.status(403).json({ message: 'Invalid deletion PIN.' });
-    }
 
     const customer = await Customer.findById(req.params.id);
     if (!customer) return res.status(404).json({ message: 'Customer not found' });
 
-    if (customer.status !== 'closed') {
-      return res.status(400).json({ message: 'Only closed accounts can be deleted.' });
+    if (customer.status === 'closed') {
+      // Closed account — normal delete PIN
+      if (pin !== 'DELETE2024') {
+        return res.status(403).json({ message: 'Invalid PIN. Use DELETE2024 for closed accounts.' });
+      }
+    } else {
+      // Active account — force delete PIN (stronger)
+      if (pin !== 'FORCE2024') {
+        return res.status(403).json({ message: 'Invalid PIN. Use FORCE2024 to force delete active accounts.' });
+      }
     }
 
     // Delete all related data

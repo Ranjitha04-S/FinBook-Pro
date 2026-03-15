@@ -49,11 +49,10 @@ export default function CustomerProfile() {
             <button className="icon-btn" onClick={() => setShowEditSheet(true)} title="Edit">
               <span className="material-symbols-rounded" style={{ fontSize: 20, color: 'var(--accent-gold)' }}>edit</span>
             </button>
-            {c.status === 'closed' && (
-              <button className="icon-btn" onClick={() => setShowDeleteSheet(true)} title="Delete">
-                <span className="material-symbols-rounded" style={{ fontSize: 20, color: 'var(--accent-rose)' }}>delete</span>
-              </button>
-            )}
+            {/* Delete button — available for ALL accounts */}
+            <button className="icon-btn" onClick={() => setShowDeleteSheet(true)} title="Delete">
+              <span className="material-symbols-rounded" style={{ fontSize: 20, color: 'var(--accent-rose)' }}>delete</span>
+            </button>
           </div>
         }
       />
@@ -392,6 +391,7 @@ function DeleteSheet({ customer: c, onClose, onSuccess }) {
   const [pin, setPin] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const isActive = c.status === 'active';
 
   const handleDelete = async () => {
     if (!pin) { setError('Enter the deletion PIN'); return; }
@@ -412,26 +412,77 @@ function DeleteSheet({ customer: c, onClose, onSuccess }) {
             <span className="material-symbols-rounded" style={{ fontSize: 28, color: 'var(--accent-rose)', fontVariationSettings: "'FILL' 1" }}>delete_forever</span>
           </div>
           <h2 style={{ marginBottom: 6 }}>Delete Account</h2>
-          <p style={{ color: 'var(--text-muted)', fontSize: 13, marginBottom: 8 }}>
-            You are about to permanently delete <strong style={{ color: 'var(--text-primary)' }}>{c.name}</strong>'s account and all related entries.
+          <p style={{ color: 'var(--text-muted)', fontSize: 13, marginBottom: 12 }}>
+            Permanently delete <strong style={{ color: 'var(--text-primary)' }}>{c.name}</strong>'s account and all related payment entries.
           </p>
-          <div style={{ background: 'var(--accent-rose-dim)', border: '1px solid rgba(244,63,94,0.2)', borderRadius: 'var(--radius-sm)', padding: '10px 14px', fontSize: 12, color: 'var(--accent-rose)', marginBottom: 20 }}>
-            This action cannot be undone. Only closed accounts can be deleted.
+
+          {/* Warning box — different message for active vs closed */}
+          <div style={{
+            background: 'var(--accent-rose-dim)',
+            border: '1px solid rgba(244,63,94,0.2)',
+            borderRadius: 'var(--radius-sm)',
+            padding: '10px 14px',
+            fontSize: 12,
+            color: 'var(--accent-rose)',
+            marginBottom: 20,
+            display: 'flex',
+            gap: 8,
+            alignItems: 'flex-start',
+          }}>
+            <span className="material-symbols-rounded" style={{ fontSize: 16, flexShrink: 0, marginTop: 1, fontVariationSettings: "'FILL' 1" }}>warning</span>
+            <span>
+              {isActive
+                ? 'This is an ACTIVE account. Force deleting will permanently remove all data including payment history. This cannot be undone.'
+                : 'This action cannot be undone. All payment entries and notifications will be deleted.'
+              }
+            </span>
+          </div>
+
+          {/* PIN hint */}
+          <div style={{
+            background: 'var(--bg-elevated)',
+            border: '1px solid var(--border)',
+            borderRadius: 'var(--radius-sm)',
+            padding: '10px 14px',
+            fontSize: 12,
+            color: 'var(--text-muted)',
+            marginBottom: 16,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+          }}>
+            <span className="material-symbols-rounded" style={{ fontSize: 16, color: 'var(--accent-gold)', fontVariationSettings: "'FILL' 1" }}>key</span>
+            {isActive
+              ? 'Use PIN: FORCE2024 to force delete this active account'
+              : 'Use PIN: DELETE2024 to delete this closed account'
+            }
           </div>
 
           <div className="form-group">
-            <label className="form-label">Enter Deletion PIN to confirm</label>
-            <input className="form-input" type="password" placeholder="Enter PIN" value={pin}
-              onChange={e => setPin(e.target.value)} style={{ letterSpacing: '0.2em', fontSize: 18 }} />
-            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>Contact admin for the deletion PIN.</div>
+            <label className="form-label">Enter PIN to confirm</label>
+            <input
+              className="form-input"
+              type="password"
+              placeholder={isActive ? 'Enter FORCE2024' : 'Enter DELETE2024'}
+              value={pin}
+              onChange={e => setPin(e.target.value)}
+              style={{ letterSpacing: '0.2em', fontSize: 18 }}
+            />
           </div>
 
-          {error && <div style={{ color: 'var(--accent-rose)', fontSize: 13, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}><span className="material-symbols-rounded" style={{ fontSize: 16 }}>error</span>{error}</div>}
+          {error && (
+            <div style={{ color: 'var(--accent-rose)', fontSize: 13, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span className="material-symbols-rounded" style={{ fontSize: 16 }}>error</span>{error}
+            </div>
+          )}
 
           <div style={{ display: 'flex', gap: 10 }}>
             <button className="btn btn-secondary" onClick={onClose} style={{ flex: 1, height: 50 }}>Cancel</button>
             <button className="btn btn-danger" onClick={handleDelete} disabled={loading} style={{ flex: 2, height: 50 }}>
-              {loading ? 'Deleting...' : <><span className="material-symbols-rounded" style={{ fontSize: 20, fontVariationSettings: "'FILL' 1" }}>delete_forever</span>Delete Permanently</>}
+              {loading ? 'Deleting...' : (
+                <><span className="material-symbols-rounded" style={{ fontSize: 20, fontVariationSettings: "'FILL' 1" }}>delete_forever</span>
+                {isActive ? 'Force Delete' : 'Delete Account'}</>
+              )}
             </button>
           </div>
         </div>
