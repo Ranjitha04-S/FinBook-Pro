@@ -39,17 +39,6 @@ echo "REACT_APP_API_URL=http://localhost:5000/api" > .env
 npm start
 ```
 
----
-
-## 🔐 Login Credentials
-
-| Field | Value |
-|-------|-------|
-| Username | `admin` |
-| Password | `srfinance2024` |
-
-> To change credentials, edit `backend/routes/auth.js` line 5.
-
 --- -->
 
 ## 💼 Business Logic
