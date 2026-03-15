@@ -5,8 +5,9 @@ const notificationSchema = new mongoose.Schema({
   dueDate: { type: Date, required: true },
   type: { type: String, enum: ['daily', 'weekly', 'monthly'], required: true },
   category: { type: String, enum: ['finance', 'vatti'], required: true },
-  isChecked: { type: Boolean, default: false },
-  isResolved: { type: Boolean, default: false },
+  isVisited: { type: Boolean, default: false },   // visited customer page
+  isChecked: { type: Boolean, default: false },   // kept for compatibility
+  isResolved: { type: Boolean, default: false },  // payment recorded = strikethrough
   createdAt: { type: Date, default: Date.now },
 });
 

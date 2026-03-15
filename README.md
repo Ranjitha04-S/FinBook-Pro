@@ -41,6 +41,17 @@ npm start
 
 ---
 
+## 🔐 Login Credentials
+
+| Field | Value |
+|-------|-------|
+| Username | `admin` |
+| Password | `srfinance2024` |
+
+> To change credentials, edit `backend/routes/auth.js` line 5.
+
+--- -->
+
 ## 💼 Business Logic
 
 ### Finance Accounts

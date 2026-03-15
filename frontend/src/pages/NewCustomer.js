@@ -25,22 +25,24 @@ const CATEGORY_CHOICES = [
 function calcFinancePreview(amount, paymentType) {
   const a = Number(amount);
   if (!a || a <= 0) return null;
-  const units = a / 10000;
   if (paymentType === 'daily' || paymentType === 'weekly') {
+    const profit = Math.round(a * 0.15);
+    const installment = Math.round(a * 0.10);
     return {
-      inhand: a - units * 1500,
-      installment: units * 1000,
+      inhand: a - profit,
+      installment,
       installments: 10,
-      totalRepay: units * 1000 * 10,
-      profit: units * 1500,
+      totalRepay: installment * 10,
+      profit,
     };
   } else {
+    const installment = Math.round(a * 0.13);
     return {
       inhand: a,
-      installment: units * 1300,
+      installment,
       installments: 10,
-      totalRepay: units * 1300 * 10,
-      profit: units * 1300 * 10 - a,
+      totalRepay: installment * 10,
+      profit: (installment * 10) - a,
     };
   }
 }
@@ -217,10 +219,10 @@ export default function NewCustomer() {
               onChange={e => set('amount', e.target.value)}
               style={{ fontSize: 18, fontFamily: 'var(--font-display)', fontWeight: 700 }}
             />
-            {form.amount && Number(form.amount) % 10000 !== 0 && (
-              <div style={{ fontSize: 11, color: 'var(--accent-gold)', display: 'flex', alignItems: 'center', gap: 4 }}>
+            {form.amount && Number(form.amount) < 1000 && (
+              <div style={{ fontSize: 11, color: 'var(--accent-rose)', display: 'flex', alignItems: 'center', gap: 4 }}>
                 <span className="material-symbols-rounded" style={{ fontSize: 14 }}>info</span>
-                Amount should be in multiples of ₹10,000
+                Minimum amount is ₹1,000
               </div>
             )}
           </div>

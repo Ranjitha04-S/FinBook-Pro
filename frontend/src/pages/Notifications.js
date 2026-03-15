@@ -14,92 +14,64 @@ export default function Notifications() {
       const endpoint = activeFilter === 'upcoming' ? '/notifications/upcoming' : '/notifications';
       const res = await api.get(endpoint);
       setNotifications(res.data);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
+    } catch (err) { console.error(err); }
+    finally { setLoading(false); }
   }, [activeFilter]);
 
   useEffect(() => { setLoading(true); load(); }, [load]);
 
-  const handleCheck = async (notif) => {
-    try {
-      await api.patch(`/notifications/${notif._id}/check`);
-      setNotifications(prev =>
-        prev.map(n => n._id === notif._id ? { ...n, isChecked: true } : n)
-      );
-      setTimeout(() => navigate(`/customer/${notif.customer._id}`), 300);
-    } catch (err) {
-      console.error(err);
-    }
+  // Tap arrow → visit customer page (no strikethrough yet)
+  const handleVisit = async (notif) => {
+    try { await api.patch(`/notifications/${notif._id}/visit`); } catch {}
+    navigate(`/customer/${notif.customer._id}`);
   };
 
-  const unchecked = notifications.filter(n => !n.isChecked);
-  const checked = notifications.filter(n => n.isChecked);
+  const resolved = notifications.filter(n => n.isResolved);
+  const pending = notifications.filter(n => !n.isResolved);
 
-  const typeColor = (type) => {
-    if (type === 'daily') return 'var(--accent-teal)';
-    if (type === 'weekly') return 'var(--accent-gold)';
-    return 'var(--accent-rose)';
-  };
-
-  const typeIcon = (type) => {
-    if (type === 'daily') return 'today';
-    if (type === 'weekly') return 'view_week';
-    return 'calendar_month';
-  };
+  const typeColor = (t) => t === 'daily' ? 'var(--accent-teal)' : t === 'weekly' ? 'var(--accent-gold)' : 'var(--accent-rose)';
+  const typeIcon = (t) => t === 'daily' ? 'today' : t === 'weekly' ? 'view_week' : 'calendar_month';
+  const getDueAmount = (n) => n.category === 'finance' ? (n.customer?.installmentAmount || 0) : (n.customer?.monthlyInterest || 0);
 
   return (
     <div className="page animate-fade-in">
       <PageHeader
         title="Notifications"
         subtitle="Payment collection reminders"
-        right={
-          unchecked.length > 0 && (
-            <div style={{
-              background: 'var(--accent-rose-dim)',
-              border: '1px solid rgba(244,63,94,0.2)',
-              borderRadius: 'var(--radius-full)',
-              padding: '4px 12px',
-              fontSize: 12,
-              color: 'var(--accent-rose)',
-              fontWeight: 700,
-            }}>
-              {unchecked.length} due
-            </div>
-          )
-        }
+        right={pending.length > 0 && (
+          <div style={{ background: 'var(--accent-rose-dim)', border: '1px solid rgba(244,63,94,0.2)', borderRadius: 'var(--radius-full)', padding: '4px 12px', fontSize: 12, color: 'var(--accent-rose)', fontWeight: 700 }}>
+            {pending.length} due
+          </div>
+        )}
       />
 
       <div style={{ padding: '16px 16px 0' }}>
-        <div className="tabs" style={{ marginBottom: 20 }}>
+        <div className="tabs" style={{ marginBottom: 16 }}>
           <button className={`tab ${activeFilter === 'today' ? 'active' : ''}`} onClick={() => setActiveFilter('today')}>Today's Due</button>
           <button className={`tab ${activeFilter === 'upcoming' ? 'active' : ''}`} onClick={() => setActiveFilter('upcoming')}>Upcoming</button>
         </div>
       </div>
 
       <div style={{ padding: '0 16px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div style={{ background: 'var(--accent-blue-dim)', border: '1px solid rgba(59,130,246,0.2)', borderRadius: 'var(--radius-md)', padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span className="material-symbols-rounded" style={{ fontSize: 18, color: 'var(--accent-blue)', fontVariationSettings: "'FILL' 1", flexShrink: 0 }}>info</span>
+          <span style={{ fontSize: 12, color: 'var(--accent-blue)', lineHeight: 1.5 }}>
+            Tap the arrow to open customer and record payment. Strikethrough appears only after payment is recorded.
+          </span>
+        </div>
 
-        {loading ? (
-          [1,2,3,4].map(i => (
-            <div key={i} className="card" style={{ padding: 16, display: 'flex', alignItems: 'center', gap: 14 }}>
-              <div className="skeleton" style={{ width: 44, height: 44, borderRadius: '50%' }} />
-              <div style={{ flex: 1 }}>
-                <div className="skeleton" style={{ width: '55%', height: 14, marginBottom: 8 }} />
-                <div className="skeleton" style={{ width: '35%', height: 12 }} />
-              </div>
-              <div className="skeleton" style={{ width: 28, height: 28, borderRadius: 8 }} />
+        {loading ? [1,2,3].map(i => (
+          <div key={i} className="card" style={{ padding: 16, display: 'flex', alignItems: 'center', gap: 14 }}>
+            <div className="skeleton" style={{ width: 44, height: 44, borderRadius: '50%' }} />
+            <div style={{ flex: 1 }}>
+              <div className="skeleton" style={{ width: '55%', height: 14, marginBottom: 8 }} />
+              <div className="skeleton" style={{ width: '35%', height: 12 }} />
             </div>
-          ))
-        ) : notifications.length === 0 ? (
+          </div>
+        )) : notifications.length === 0 ? (
           <div className="card">
             <div className="empty-state">
-              <div style={{
-                width: 72, height: 72, borderRadius: 24,
-                background: 'var(--accent-emerald-dim)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-              }}>
+              <div style={{ width: 72, height: 72, borderRadius: 24, background: 'var(--accent-emerald-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <span className="material-symbols-rounded" style={{ fontSize: 36, color: 'var(--accent-emerald)', fontVariationSettings: "'FILL' 1" }}>check_circle</span>
               </div>
               <div style={{ fontWeight: 700, fontSize: 16 }}>All clear!</div>
@@ -110,85 +82,33 @@ export default function Notifications() {
           </div>
         ) : (
           <>
-            {/* Unchecked */}
-            {unchecked.length > 0 && (
+            {pending.length > 0 && (
               <div>
-                <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 10, paddingLeft: 4 }}>
-                  Pending ({unchecked.length})
-                </div>
+                <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 10, paddingLeft: 4 }}>Pending ({pending.length})</div>
                 <div className="card">
-                  {unchecked.map((n, i) => (
-                    <div
-                      key={n._id}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 14,
-                        padding: '14px 16px',
-                        borderBottom: i < unchecked.length - 1 ? '1px solid var(--border)' : 'none',
-                      }}
-                    >
-                      {/* Checkbox */}
-                      <button
-                        onClick={() => handleCheck(n)}
-                        style={{
-                          width: 26,
-                          height: 26,
-                          borderRadius: 8,
-                          border: `2px solid ${typeColor(n.type)}`,
-                          background: 'transparent',
-                          cursor: 'pointer',
-                          flexShrink: 0,
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          transition: 'all 0.15s',
-                        }}
-                      />
-
-                      {/* Avatar */}
-                      <div
-                        className={`avatar ${n.category === 'finance' ? 'avatar-blue' : 'avatar-violet'}`}
-                        style={{ width: 40, height: 40, fontSize: 14 }}
-                      >
+                  {pending.map((n, i) => (
+                    <div key={n._id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', borderBottom: i < pending.length - 1 ? '1px solid var(--border)' : 'none' }}>
+                      <div style={{ width: 24, height: 24, borderRadius: 7, border: `2px solid ${typeColor(n.type)}`, flexShrink: 0 }} />
+                      <div className={`avatar ${n.category === 'finance' ? 'avatar-blue' : 'avatar-violet'}`} style={{ width: 40, height: 40, fontSize: 14 }}>
                         {getInitials(n.customer?.name)}
                       </div>
-
-                      {/* Info */}
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontWeight: 600, fontSize: 15, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 3 }}>
-                          {n.customer?.name}
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <div style={{ fontWeight: 600, fontSize: 15, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 4 }}>{n.customer?.name}</div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                           <span className={`badge badge-${n.category}`}>{n.category}</span>
-                          <span style={{
-                            display: 'inline-flex', alignItems: 'center', gap: 3,
-                            fontSize: 11, color: typeColor(n.type), fontWeight: 600,
-                          }}>
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 11, color: typeColor(n.type), fontWeight: 600 }}>
                             <span className="material-symbols-rounded" style={{ fontSize: 13, fontVariationSettings: "'FILL' 1" }}>{typeIcon(n.type)}</span>
                             {n.type}
                           </span>
-                          <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                            {formatDate(n.dueDate)}
-                          </span>
+                          <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{formatDate(n.dueDate)}</span>
                         </div>
                       </div>
-
-                      {/* Amount */}
-                      <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                        <div style={{ fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 700, color: 'var(--accent-gold)' }}>
-                          {formatCurrency(n.category === 'finance' ? n.customer?.amount : n.customer?.amount)}
-                        </div>
+                      <div style={{ textAlign: 'right', flexShrink: 0, marginRight: 4 }}>
+                        <div style={{ fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 700, color: 'var(--accent-gold)' }}>{formatCurrency(getDueAmount(n))}</div>
                         <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>due</div>
                       </div>
-
-                      {/* Arrow */}
-                      <button
-                        onClick={() => navigate(`/customer/${n.customer._id}`)}
-                        className="icon-btn"
-                        style={{ width: 36, height: 36, borderRadius: 10 }}
-                      >
-                        <span className="material-symbols-rounded" style={{ fontSize: 18, color: 'var(--text-muted)' }}>open_in_new</span>
+                      <button onClick={() => handleVisit(n)} style={{ width: 40, height: 40, borderRadius: 12, background: n.category === 'finance' ? 'var(--accent-blue-dim)' : 'var(--accent-violet-dim)', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        <span className="material-symbols-rounded" style={{ fontSize: 20, color: n.category === 'finance' ? 'var(--accent-blue)' : 'var(--accent-violet)', fontVariationSettings: "'FILL' 1" }}>arrow_circle_right</span>
                       </button>
                     </div>
                   ))}
@@ -196,49 +116,21 @@ export default function Notifications() {
               </div>
             )}
 
-            {/* Checked / done */}
-            {checked.length > 0 && (
+            {resolved.length > 0 && (
               <div>
-                <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 10, paddingLeft: 4 }}>
-                  Collected ({checked.length})
-                </div>
+                <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 10, paddingLeft: 4 }}>Collected ({resolved.length})</div>
                 <div className="card">
-                  {checked.map((n, i) => (
-                    <div
-                      key={n._id}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 14,
-                        padding: '14px 16px',
-                        opacity: 0.55,
-                        borderBottom: i < checked.length - 1 ? '1px solid var(--border)' : 'none',
-                      }}
-                    >
-                      {/* Checked box */}
-                      <div style={{
-                        width: 26, height: 26, borderRadius: 8,
-                        background: 'var(--accent-emerald)',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        flexShrink: 0,
-                      }}>
-                        <span className="material-symbols-rounded" style={{ fontSize: 16, color: '#0F172A', fontVariationSettings: "'FILL' 1" }}>check</span>
+                  {resolved.map((n, i) => (
+                    <div key={n._id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', opacity: 0.5, borderBottom: i < resolved.length - 1 ? '1px solid var(--border)' : 'none' }}>
+                      <div style={{ width: 24, height: 24, borderRadius: 7, background: 'var(--accent-emerald)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        <span className="material-symbols-rounded" style={{ fontSize: 15, color: '#0F172A', fontVariationSettings: "'FILL' 1" }}>check</span>
                       </div>
-                      <div className={`avatar ${n.category === 'finance' ? 'avatar-blue' : 'avatar-violet'}`} style={{ width: 40, height: 40, fontSize: 14 }}>
-                        {getInitials(n.customer?.name)}
-                      </div>
+                      <div className={`avatar ${n.category === 'finance' ? 'avatar-blue' : 'avatar-violet'}`} style={{ width: 40, height: 40, fontSize: 14 }}>{getInitials(n.customer?.name)}</div>
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{
-                          fontWeight: 600, fontSize: 15,
-                          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                          textDecoration: 'line-through',
-                          marginBottom: 2,
-                        }}>
-                          {n.customer?.name}
-                        </div>
-                        <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{n.type} • {n.category}</div>
+                        <div style={{ fontWeight: 600, fontSize: 15, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textDecoration: 'line-through', marginBottom: 2 }}>{n.customer?.name}</div>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{n.type} • {n.category} • Paid</div>
                       </div>
-                      <span className="material-symbols-rounded" style={{ fontSize: 18, color: 'var(--accent-emerald)', fontVariationSettings: "'FILL' 1" }}>task_alt</span>
+                      <span className="material-symbols-rounded" style={{ fontSize: 22, color: 'var(--accent-emerald)', fontVariationSettings: "'FILL' 1" }}>task_alt</span>
                     </div>
                   ))}
                 </div>

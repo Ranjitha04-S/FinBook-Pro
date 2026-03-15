@@ -4,30 +4,31 @@ const Customer = require('../models/Customer');
 const Entry = require('../models/Entry');
 const Notification = require('../models/Notification');
 
-// Calculate finance values
+// Calculate finance values — supports any amount (5k, 7k, 10k, 20k...)
 function calcFinance(amount, paymentType) {
-  const units = amount / 10000;
+  const a = Number(amount);
   if (paymentType === 'daily' || paymentType === 'weekly') {
-    const profitPerUnit = 1500;
-    const installmentPerUnit = 1000;
+    // Profit = 15% of amount, installment = 10% of amount, 10 installments
+    const profit = Math.round(a * 0.15);
+    const installment = Math.round(a * 0.10);
     const totalInstallments = 10;
     return {
-      inhandAmount: amount - (units * profitPerUnit),
-      installmentAmount: units * installmentPerUnit,
+      inhandAmount: a - profit,
+      installmentAmount: installment,
       totalInstallments,
-      financeProfit: units * profitPerUnit,
-      remainingAmount: units * installmentPerUnit * totalInstallments,
+      financeProfit: profit,
+      remainingAmount: installment * totalInstallments,
     };
   } else {
-    // monthly: give full amount, 1300/10k per month for 10 months
-    const installmentPerUnit = 1300;
+    // monthly: give full amount, 13% of amount per month for 10 months
+    const installment = Math.round(a * 0.13);
     const totalInstallments = 10;
     return {
-      inhandAmount: amount,
-      installmentAmount: units * installmentPerUnit,
+      inhandAmount: a,
+      installmentAmount: installment,
       totalInstallments,
-      financeProfit: units * installmentPerUnit * totalInstallments - amount,
-      remainingAmount: units * installmentPerUnit * totalInstallments,
+      financeProfit: (installment * totalInstallments) - a,
+      remainingAmount: installment * totalInstallments,
     };
   }
 }
@@ -131,7 +132,6 @@ router.patch('/:id/pay', async (req, res) => {
       customer.remainingAmount = Math.max(0, customer.remainingAmount - Number(amount));
       if (customer.remainingAmount === 0) customer.status = 'closed';
     } else {
-      // vatti: check if they paid principal
       if (type === 'payment') {
         customer.paidAmount += Number(amount);
         customer.remainingAmount = Math.max(0, customer.remainingAmount - Number(amount));
@@ -141,17 +141,24 @@ router.patch('/:id/pay', async (req, res) => {
 
     await customer.save();
 
-    // Schedule next notification
-    if (customer.status === 'active') {
-      await scheduleNextNotification(customer);
-    }
+    // Resolve & strikethrough current notification ONLY after payment recorded
+    await Notification.findOneAndUpdate(
+      { customer: customer._id, isResolved: false, isChecked: true },
+      { isResolved: true },
+      { sort: { dueDate: 1 } }
+    );
 
-    // Resolve current notification
+    // Also resolve any unchecked due notification for this customer
     await Notification.findOneAndUpdate(
       { customer: customer._id, isResolved: false },
       { isResolved: true, isChecked: true },
       { sort: { dueDate: 1 } }
     );
+
+    // Schedule next notification only if account still active
+    if (customer.status === 'active') {
+      await scheduleNextNotification(customer);
+    }
 
     res.json(customer);
   } catch (err) {
@@ -176,5 +183,83 @@ async function scheduleNextNotification(customer) {
   });
   await notif.save();
 }
+
+// PUT edit customer details
+router.put('/:id', async (req, res) => {
+  try {
+    const { name, phone, alternatePhone, startDate, amount, paymentType, interestRate } = req.body;
+    const customer = await Customer.findById(req.params.id);
+    if (!customer) return res.status(404).json({ message: 'Customer not found' });
+
+    // Update basic fields
+    customer.name = name || customer.name;
+    customer.phone = phone || customer.phone;
+    customer.alternatePhone = alternatePhone ?? customer.alternatePhone;
+    customer.startDate = startDate || customer.startDate;
+
+    // If amount or paymentType changed, recalculate
+    const amountChanged = amount && Number(amount) !== customer.amount;
+    const typeChanged = paymentType && paymentType !== customer.paymentType;
+
+    if (amountChanged || typeChanged) {
+      const newAmount = Number(amount) || customer.amount;
+      const newType = paymentType || customer.paymentType;
+      customer.amount = newAmount;
+      customer.paymentType = newType;
+
+      if (customer.category === 'finance') {
+        const calc = calcFinance(newAmount, newType);
+        customer.inhandAmount = calc.inhandAmount;
+        customer.installmentAmount = calc.installmentAmount;
+        customer.totalInstallments = calc.totalInstallments;
+        customer.financeProfit = calc.financeProfit;
+        // Recalculate remaining based on what's already paid
+        customer.remainingAmount = Math.max(0, calc.remainingAmount - customer.paidAmount);
+      } else {
+        const rate = Number(interestRate || customer.interestRate) / 100;
+        customer.interestRate = Number(interestRate || customer.interestRate);
+        customer.monthlyInterest = Math.round(newAmount * rate);
+        customer.inhandAmount = newAmount;
+        customer.remainingAmount = Math.max(0, newAmount - customer.paidAmount);
+      }
+    } else if (customer.category === 'vatti' && interestRate) {
+      const rate = Number(interestRate) / 100;
+      customer.interestRate = Number(interestRate);
+      customer.monthlyInterest = Math.round(customer.amount * rate);
+    }
+
+    await customer.save();
+    res.json(customer);
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
+// DELETE customer — only closed accounts, requires confirmation PIN
+router.delete('/:id', async (req, res) => {
+  try {
+    const { pin } = req.body;
+    // Secure deletion PIN
+    if (pin !== 'DELETE2024') {
+      return res.status(403).json({ message: 'Invalid deletion PIN.' });
+    }
+
+    const customer = await Customer.findById(req.params.id);
+    if (!customer) return res.status(404).json({ message: 'Customer not found' });
+
+    if (customer.status !== 'closed') {
+      return res.status(400).json({ message: 'Only closed accounts can be deleted.' });
+    }
+
+    // Delete all related data
+    await Entry.deleteMany({ customer: customer._id });
+    await Notification.deleteMany({ customer: customer._id });
+    await Customer.findByIdAndDelete(req.params.id);
+
+    res.json({ message: 'Customer deleted successfully.' });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
 
 module.exports = router;
