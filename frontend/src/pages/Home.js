@@ -22,6 +22,7 @@ export default function Home() {
   const [chartData, setChartData] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [activeTab, setActiveTab] = useState('all');
+  const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [notifCount, setNotifCount] = useState(0);
   const navigate = useNavigate();
@@ -49,8 +50,13 @@ export default function Home() {
   useEffect(() => { load(); }, [load]);
 
   const filteredCustomers = customers.filter(c => {
-    if (activeTab === 'all') return true;
-    return c.category === activeTab;
+    const matchTab = activeTab === 'all' || c.category === activeTab;
+    const q = searchQuery.toLowerCase().trim();
+    const matchSearch = !q ||
+      c.name.toLowerCase().includes(q) ||
+      c.phone.includes(q) ||
+      (c.alternatePhone && c.alternatePhone.includes(q));
+    return matchTab && matchSearch;
   });
 
   const todayStr = new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' });
@@ -233,7 +239,48 @@ export default function Home() {
         <div>
           <div className="section-header">
             <h3>Customers</h3>
-            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{filteredCustomers.length} accounts</span>
+            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+              {searchQuery ? `${filteredCustomers.length} found` : `${filteredCustomers.length} accounts`}
+            </span>
+          </div>
+
+          {/* Search bar */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+            background: 'var(--bg-card)',
+            border: '1px solid var(--border)',
+            borderRadius: 'var(--radius-md)',
+            padding: '0 14px',
+            marginBottom: 12,
+            transition: 'border-color 0.2s',
+          }}>
+            <span className="material-symbols-rounded" style={{ fontSize: 20, color: 'var(--text-muted)', flexShrink: 0, fontVariationSettings: "'FILL' 0" }}>search</span>
+            <input
+              type="text"
+              placeholder="Search by name or phone..."
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              style={{
+                flex: 1,
+                background: 'transparent',
+                border: 'none',
+                outline: 'none',
+                color: 'var(--text-primary)',
+                fontFamily: 'var(--font-body)',
+                fontSize: 15,
+                padding: '13px 0',
+              }}
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: 4 }}
+              >
+                <span className="material-symbols-rounded" style={{ fontSize: 18, color: 'var(--text-muted)', fontVariationSettings: "'FILL' 1" }}>cancel</span>
+              </button>
+            )}
           </div>
 
           {/* Category tabs */}
@@ -259,8 +306,17 @@ export default function Home() {
             ) : filteredCustomers.length === 0 ? (
               <div className="empty-state">
                 <span className="material-symbols-rounded" style={{ fontSize: 48, color: 'var(--text-dim)', fontVariationSettings: "'FILL' 1" }}>person_search</span>
-                <div style={{ fontWeight: 600 }}>No customers yet</div>
-                <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>Create a new account to get started</div>
+                <div style={{ fontWeight: 600 }}>
+                  {searchQuery ? `No results for "${searchQuery}"` : 'No customers yet'}
+                </div>
+                <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+                  {searchQuery ? 'Try searching by a different name or phone number' : 'Create a new account to get started'}
+                </div>
+                {searchQuery && (
+                  <button className="btn btn-secondary" onClick={() => setSearchQuery('')} style={{ marginTop: 8, padding: '8px 20px', fontSize: 13 }}>
+                    Clear Search
+                  </button>
+                )}
               </div>
             ) : filteredCustomers.map(c => (
               <CustomerListItem key={c._id} customer={c} onClick={() => navigate(`/customer/${c._id}`)} />
