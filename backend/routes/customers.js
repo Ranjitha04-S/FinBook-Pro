@@ -5,32 +5,32 @@ const Entry = require('../models/Entry');
 const Notification = require('../models/Notification');
 
 // Calculate finance values — supports any amount (5k, 7k, 10k, 20k...)
-// For monthly, totalInstallments can be custom (5, 10, 20 etc.)
 function calcFinance(amount, paymentType, totalInstallments) {
   const a = Number(amount);
   if (paymentType === 'daily' || paymentType === 'weekly') {
-    // Daily/Weekly: fixed 10 installments, 15% profit, 10% per installment
+    // Daily/Weekly: 15% profit upfront, 10% per installment × 10
     const profit = Math.round(a * 0.15);
     const installment = Math.round(a * 0.10);
-    const months = 10;
     return {
       inhandAmount: a - profit,
       installmentAmount: installment,
-      totalInstallments: months,
+      totalInstallments: 10,
       financeProfit: profit,
-      remainingAmount: installment * months,
+      remainingAmount: installment * 10,
     };
   } else {
-    // Monthly: total repayment is always amount × 1.3 (fixed profit rate)
-    // installment = total repayment / selected months
+    // Monthly: profit = ₹300 per month per ₹10,000
+    // installment = (amount + profit_total) ÷ months
     const months = Number(totalInstallments) || 10;
-    const totalRepay = Math.round(a * 1.3);
+    const profitPerMonth = Math.round((a / 10000) * 300);
+    const totalProfit = profitPerMonth * months;
+    const totalRepay = a + totalProfit;
     const installment = Math.round(totalRepay / months);
     return {
       inhandAmount: a,
       installmentAmount: installment,
       totalInstallments: months,
-      financeProfit: totalRepay - a,
+      financeProfit: totalProfit,
       remainingAmount: totalRepay,
     };
   }

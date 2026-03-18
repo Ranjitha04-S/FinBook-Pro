@@ -36,17 +36,18 @@ function calcFinancePreview(amount, paymentType, totalInstallments) {
       profit,
     };
   } else {
-    // Total repayment always = amount × 1.3 (30% profit, fixed)
-    // installment = total repayment ÷ months chosen
+    // Profit = ₹300 per month per ₹10,000
     const months = Number(totalInstallments) || 10;
-    const totalRepay = Math.round(a * 1.3);
+    const profitPerMonth = Math.round((a / 10000) * 300);
+    const totalProfit = profitPerMonth * months;
+    const totalRepay = a + totalProfit;
     const installment = Math.round(totalRepay / months);
     return {
       inhand: a,
       installment,
       installments: months,
       totalRepay,
-      profit: totalRepay - a,
+      profit: totalProfit,
     };
   }
 }
