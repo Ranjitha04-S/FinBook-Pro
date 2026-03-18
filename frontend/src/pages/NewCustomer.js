@@ -22,7 +22,7 @@ const CATEGORY_CHOICES = [
   },
 ];
 
-function calcFinancePreview(amount, paymentType) {
+function calcFinancePreview(amount, paymentType, totalInstallments) {
   const a = Number(amount);
   if (!a || a <= 0) return null;
   if (paymentType === 'daily' || paymentType === 'weekly') {
@@ -36,13 +36,17 @@ function calcFinancePreview(amount, paymentType) {
       profit,
     };
   } else {
-    const installment = Math.round(a * 0.13);
+    // Total repayment always = amount × 1.3 (30% profit, fixed)
+    // installment = total repayment ÷ months chosen
+    const months = Number(totalInstallments) || 10;
+    const totalRepay = Math.round(a * 1.3);
+    const installment = Math.round(totalRepay / months);
     return {
       inhand: a,
       installment,
-      installments: 10,
-      totalRepay: installment * 10,
-      profit: (installment * 10) - a,
+      installments: months,
+      totalRepay,
+      profit: totalRepay - a,
     };
   }
 }
@@ -73,11 +77,12 @@ export default function NewCustomer() {
     paymentType: 'daily',
     startDate: new Date().toISOString().split('T')[0],
     interestRate: '10',
+    totalInstallments: '10',
   });
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
-  const finPreview = category === 'finance' ? calcFinancePreview(form.amount, form.paymentType) : null;
+  const finPreview = category === 'finance' ? calcFinancePreview(form.amount, form.paymentType, form.totalInstallments) : null;
   const vattiPreview = category === 'vatti' ? calcVattiPreview(form.amount, form.interestRate) : null;
 
   const handleSubmit = async () => {
@@ -235,6 +240,54 @@ export default function NewCustomer() {
               <option value="monthly">Monthly</option>
             </select>
           </div>
+
+          {/* Monthly duration selector — finance only */}
+          {category === 'finance' && form.paymentType === 'monthly' && (
+            <div className="form-group">
+              <label className="form-label">Number of Months *</label>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
+                {[5, 10, 15, 20, 25, 30, 36, 48].map(m => (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => set('totalInstallments', String(m))}
+                    style={{
+                      padding: '12px 0',
+                      borderRadius: 'var(--radius-sm)',
+                      border: `1.5px solid ${form.totalInstallments === String(m) ? 'var(--accent-blue)' : 'var(--border)'}`,
+                      background: form.totalInstallments === String(m) ? 'var(--accent-blue-dim)' : 'var(--bg-elevated)',
+                      color: form.totalInstallments === String(m) ? 'var(--accent-blue)' : 'var(--text-muted)',
+                      fontFamily: 'var(--font-display)',
+                      fontWeight: 700,
+                      fontSize: 15,
+                      cursor: 'pointer',
+                      transition: 'all 0.15s',
+                    }}
+                  >
+                    {m}
+                  </button>
+                ))}
+              </div>
+              {/* Custom months input */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 10 }}>
+                <span style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>Custom:</span>
+                <input
+                  className="form-input"
+                  type="number"
+                  placeholder="Enter months"
+                  value={![5,10,15,20,25,30,36,48].includes(Number(form.totalInstallments)) ? form.totalInstallments : ''}
+                  onChange={e => set('totalInstallments', e.target.value)}
+                  style={{ flex: 1 }}
+                  min="1"
+                  max="120"
+                />
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 6, display: 'flex', alignItems: 'center', gap: 4 }}>
+                <span className="material-symbols-rounded" style={{ fontSize: 14, fontVariationSettings: "'FILL' 1" }}>info</span>
+                Selected: <strong style={{ color: 'var(--accent-blue)', marginLeft: 4 }}>{form.totalInstallments} months</strong>
+              </div>
+            </div>
+          )}
 
           {category === 'vatti' && (
             <div className="form-group">

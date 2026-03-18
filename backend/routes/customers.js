@@ -5,30 +5,33 @@ const Entry = require('../models/Entry');
 const Notification = require('../models/Notification');
 
 // Calculate finance values — supports any amount (5k, 7k, 10k, 20k...)
-function calcFinance(amount, paymentType) {
+// For monthly, totalInstallments can be custom (5, 10, 20 etc.)
+function calcFinance(amount, paymentType, totalInstallments) {
   const a = Number(amount);
   if (paymentType === 'daily' || paymentType === 'weekly') {
-    // Profit = 15% of amount, installment = 10% of amount, 10 installments
+    // Daily/Weekly: fixed 10 installments, 15% profit, 10% per installment
     const profit = Math.round(a * 0.15);
     const installment = Math.round(a * 0.10);
-    const totalInstallments = 10;
+    const months = 10;
     return {
       inhandAmount: a - profit,
       installmentAmount: installment,
-      totalInstallments,
+      totalInstallments: months,
       financeProfit: profit,
-      remainingAmount: installment * totalInstallments,
+      remainingAmount: installment * months,
     };
   } else {
-    // monthly: give full amount, 13% of amount per month for 10 months
-    const installment = Math.round(a * 0.13);
-    const totalInstallments = 10;
+    // Monthly: total repayment is always amount × 1.3 (fixed profit rate)
+    // installment = total repayment / selected months
+    const months = Number(totalInstallments) || 10;
+    const totalRepay = Math.round(a * 1.3);
+    const installment = Math.round(totalRepay / months);
     return {
       inhandAmount: a,
       installmentAmount: installment,
-      totalInstallments,
-      financeProfit: (installment * totalInstallments) - a,
-      remainingAmount: installment * totalInstallments,
+      totalInstallments: months,
+      financeProfit: totalRepay - a,
+      remainingAmount: totalRepay,
     };
   }
 }
@@ -62,12 +65,12 @@ router.get('/:id', async (req, res) => {
 // POST create customer
 router.post('/', async (req, res) => {
   try {
-    const { name, phone, alternatePhone, category, paymentType, amount, startDate, interestRate } = req.body;
+    const { name, phone, alternatePhone, category, paymentType, amount, startDate, interestRate, totalInstallments } = req.body;
 
     let customerData = { name, phone, alternatePhone, category, paymentType, amount, startDate };
 
     if (category === 'finance') {
-      const calc = calcFinance(Number(amount), paymentType);
+      const calc = calcFinance(Number(amount), paymentType, totalInstallments);
       Object.assign(customerData, calc);
     } else {
       // vatti
@@ -76,13 +79,12 @@ router.post('/', async (req, res) => {
       customerData.interestRate = interestRate;
       customerData.monthlyInterest = monthlyInterest;
       customerData.inhandAmount = amount;
-      customerData.remainingAmount = amount; // principal remaining
+      customerData.remainingAmount = amount;
     }
 
     const customer = new Customer(customerData);
     await customer.save();
 
-    // Create initial notifications
     await scheduleNotification(customer);
 
     res.status(201).json(customer);
@@ -187,33 +189,32 @@ async function scheduleNextNotification(customer) {
 // PUT edit customer details
 router.put('/:id', async (req, res) => {
   try {
-    const { name, phone, alternatePhone, startDate, amount, paymentType, interestRate } = req.body;
+    const { name, phone, alternatePhone, startDate, amount, paymentType, interestRate, totalInstallments } = req.body;
     const customer = await Customer.findById(req.params.id);
     if (!customer) return res.status(404).json({ message: 'Customer not found' });
 
-    // Update basic fields
     customer.name = name || customer.name;
     customer.phone = phone || customer.phone;
     customer.alternatePhone = alternatePhone ?? customer.alternatePhone;
     customer.startDate = startDate || customer.startDate;
 
-    // If amount or paymentType changed, recalculate
     const amountChanged = amount && Number(amount) !== customer.amount;
     const typeChanged = paymentType && paymentType !== customer.paymentType;
+    const monthsChanged = totalInstallments && Number(totalInstallments) !== customer.totalInstallments;
 
-    if (amountChanged || typeChanged) {
+    if (amountChanged || typeChanged || monthsChanged) {
       const newAmount = Number(amount) || customer.amount;
       const newType = paymentType || customer.paymentType;
+      const newMonths = totalInstallments || customer.totalInstallments;
       customer.amount = newAmount;
       customer.paymentType = newType;
 
       if (customer.category === 'finance') {
-        const calc = calcFinance(newAmount, newType);
+        const calc = calcFinance(newAmount, newType, newMonths);
         customer.inhandAmount = calc.inhandAmount;
         customer.installmentAmount = calc.installmentAmount;
         customer.totalInstallments = calc.totalInstallments;
         customer.financeProfit = calc.financeProfit;
-        // Recalculate remaining based on what's already paid
         customer.remainingAmount = Math.max(0, calc.remainingAmount - customer.paidAmount);
       } else {
         const rate = Number(interestRate || customer.interestRate) / 100;
