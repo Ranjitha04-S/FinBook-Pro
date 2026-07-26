@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api, { formatCurrency, formatDate, formatTime, getInitials } from '../utils/api';
 import PageHeader from '../components/common/PageHeader';
+import Toast, { showToast } from '../components/common/Toast';
 
 export default function CustomerProfile() {
   const { id } = useParams();
@@ -12,6 +13,8 @@ export default function CustomerProfile() {
   const [showEditSheet, setShowEditSheet] = useState(false);
   const [showDeleteSheet, setShowDeleteSheet] = useState(false);
   const [activeSection, setActiveSection] = useState('overview');
+  const [exporting, setExporting] = useState(false);
+  const [toast, setToast] = useState(null);
 
   const load = useCallback(async () => {
     try {
@@ -22,6 +25,42 @@ export default function CustomerProfile() {
   }, [id, navigate]);
 
   useEffect(() => { load(); }, [load]);
+
+  // ── Export helpers ──────────────────────────────────────────────────────
+  const handleExportCSV = async () => {
+    try {
+      setExporting(true);
+      const res = await api.get(`/reports/customer/${id}/csv`, { responseType: 'blob' });
+      const url = URL.createObjectURL(new Blob([res.data], { type: 'text/csv' }));
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${data?.customer?.name?.replace(/\s+/g, '_')}_statement.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+      showToast(setToast, 'CSV exported successfully', 'success');
+    } catch (err) {
+      console.error('CSV export failed', err);
+      showToast(setToast, 'CSV export failed', 'error');
+    } finally { setExporting(false); }
+  };
+
+  const handleExportPDF = async () => {
+    try {
+      setExporting(true);
+      const res = await api.get(`/reports/customer/${id}/pdf`, { responseType: 'blob' });
+      const url = URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${data?.customer?.name?.replace(/\s+/g, '_')}_statement.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+      showToast(setToast, 'PDF downloaded successfully', 'success');
+    } catch (err) {
+      console.error('PDF export failed', err);
+      showToast(setToast, 'PDF export failed', 'error');
+    } finally { setExporting(false); }
+  };
+  // ────────────────────────────────────────────────────────────────────────
 
   if (loading) return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-muted)' }}>Loading...</div>
@@ -46,6 +85,26 @@ export default function CustomerProfile() {
         back
         right={
           <div style={{ display: 'flex', gap: 8 }}>
+            {/* CSV Export */}
+            <button
+              className="icon-btn"
+              onClick={handleExportCSV}
+              disabled={exporting}
+              title="Export CSV"
+              style={{ opacity: exporting ? 0.5 : 1 }}
+            >
+              <span className="material-symbols-rounded" style={{ fontSize: 20, color: 'var(--accent-emerald)' }}>table_view</span>
+            </button>
+            {/* PDF Export */}
+            <button
+              className="icon-btn"
+              onClick={handleExportPDF}
+              disabled={exporting}
+              title="Download PDF Statement"
+              style={{ opacity: exporting ? 0.5 : 1 }}
+            >
+              <span className="material-symbols-rounded" style={{ fontSize: 20, color: 'var(--accent-rose)' }}>picture_as_pdf</span>
+            </button>
             <button className="icon-btn" onClick={() => setShowEditSheet(true)} title="Edit">
               <span className="material-symbols-rounded" style={{ fontSize: 20, color: 'var(--accent-gold)' }}>edit</span>
             </button>
@@ -57,147 +116,165 @@ export default function CustomerProfile() {
         }
       />
 
-      <div style={{ padding: '20px 16px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div className="p-4 md:p-6 flex flex-col md:flex-row gap-6 max-w-7xl mx-auto w-full items-start">
+        
+        {/* Left Side: Profile Summary, Stats, Terms, and Primary actions */}
+        <div className="w-full md:w-96 shrink-0 flex flex-col gap-5">
+          {/* Profile hero */}
+          <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-xl)', padding: 20, position: 'relative', overflow: 'hidden' }}>
+            <div style={{ position: 'absolute', right: -30, top: -30, width: 120, height: 120, borderRadius: '50%', background: `radial-gradient(circle, ${catDim} 0%, transparent 70%)` }} />
 
-        {/* Profile hero */}
-        <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-xl)', padding: 20, position: 'relative', overflow: 'hidden' }}>
-          <div style={{ position: 'absolute', right: -30, top: -30, width: 120, height: 120, borderRadius: '50%', background: `radial-gradient(circle, ${catDim} 0%, transparent 70%)` }} />
-
-          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16, marginBottom: 20 }}>
-            <div className={`avatar ${isFin ? 'avatar-blue' : 'avatar-violet'}`} style={{ width: 56, height: 56, fontSize: 20, borderRadius: 18 }}>
-              {getInitials(c.name)}
-            </div>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 800, marginBottom: 4 }}>{c.name}</div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                <span className="material-symbols-rounded" style={{ fontSize: 14, color: 'var(--text-muted)', fontVariationSettings: "'FILL' 1" }}>call</span>
-                <span style={{ fontSize: 14, color: 'var(--text-secondary)' }}>{c.phone}</span>
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16, marginBottom: 20 }}>
+              <div className={`avatar ${isFin ? 'avatar-blue' : 'avatar-violet'}`} style={{ width: 56, height: 56, fontSize: 20, borderRadius: 18 }}>
+                {getInitials(c.name)}
               </div>
-              {c.alternatePhone && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span className="material-symbols-rounded" style={{ fontSize: 14, color: 'var(--text-muted)', fontVariationSettings: "'FILL' 1" }}>phone_forwarded</span>
-                  <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>{c.alternatePhone}</span>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 800, marginBottom: 4 }}>{c.name}</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                  <span className="material-symbols-rounded" style={{ fontSize: 14, color: 'var(--text-muted)', fontVariationSettings: "'FILL' 1" }}>call</span>
+                  <a
+                    href={`tel:+91${c.phone}`}
+                    style={{ fontSize: 14, color: 'var(--accent-gold)', textDecoration: 'none', fontWeight: 500 }}
+                  >{c.phone}</a>
                 </div>
-              )}
-              <div style={{ marginTop: 8 }}>
-                <span className={`badge badge-${c.status}`}>{c.status}</span>
-              </div>
-            </div>
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 16 }}>
-            <MiniStat label="Given" value={formatCurrency(c.inhandAmount || c.amount)} color={catColor} />
-            <MiniStat label="Collected" value={formatCurrency(c.paidAmount)} color="var(--accent-emerald)" />
-            <MiniStat label="Remaining" value={formatCurrency(c.remainingAmount)} color={c.remainingAmount > 0 ? 'var(--accent-rose)' : 'var(--text-muted)'} />
-          </div>
-
-          <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Repayment Progress</span>
-              <span style={{ fontSize: 13, fontWeight: 700, color: catColor }}>{Math.round(Math.min(progress, 100))}%</span>
-            </div>
-            <div className="progress-bar" style={{ height: 8 }}>
-              <div className="progress-fill" style={{ width: `${Math.min(progress, 100)}%`, background: `linear-gradient(90deg, ${catColor}, ${isFin ? '#60A5FA' : '#A78BFA'})` }} />
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6 }}>
-              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Started {formatDate(c.startDate)}</span>
-              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Total: {formatCurrency(totalExpected)}</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Terms card */}
-        <div className="card" style={{ padding: 16 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 14 }}>
-            {isFin ? 'Finance Terms' : 'Vatti Terms'}
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {isFin ? (
-              <>
-                <InfoRow icon="payments" label={`${c.paymentType} installment`} value={formatCurrency(c.installmentAmount)} color="var(--accent-blue)" />
-                <InfoRow icon="format_list_numbered" label="Total installments" value={`${c.totalInstallments} payments`} color="var(--accent-blue)" />
-                <InfoRow icon="trending_up" label="Your profit" value={formatCurrency(c.financeProfit)} color="var(--accent-gold)" />
-              </>
-            ) : (
-              <>
-                <InfoRow icon="percent" label="Interest rate" value={`${c.interestRate}% per month`} color="var(--accent-violet)" />
-                <InfoRow icon="payments" label="Monthly interest" value={formatCurrency(c.monthlyInterest)} color="var(--accent-violet)" />
-                <InfoRow icon="account_balance_wallet" label="Principal amount" value={formatCurrency(c.amount)} color="var(--accent-gold)" />
-                <InfoRow icon="hourglass_bottom" label="Remaining principal" value={formatCurrency(c.remainingAmount)} color={c.remainingAmount > 0 ? 'var(--accent-rose)' : 'var(--accent-emerald)'} />
-              </>
-            )}
-          </div>
-        </div>
-
-        {/* Section tabs */}
-        <div className="tabs">
-          <button className={`tab ${activeSection === 'overview' ? 'active' : ''}`} onClick={() => setActiveSection('overview')}>Overview</button>
-          <button className={`tab ${activeSection === 'entries' ? 'active' : ''}`} onClick={() => setActiveSection('entries')}>
-            Entries {entries.length > 0 && `(${entries.length})`}
-          </button>
-        </div>
-
-        {activeSection === 'overview' && (
-          <div className="card" style={{ padding: 16 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 14 }}>Account Information</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <InfoRow icon="calendar_today" label="Account opened" value={formatDate(c.startDate)} color="var(--text-secondary)" />
-              <InfoRow icon="payments" label="Payment frequency" value={c.paymentType.charAt(0).toUpperCase() + c.paymentType.slice(1)} color="var(--text-secondary)" />
-              <InfoRow icon="receipt_long" label="Total entries" value={`${entries.length} payments`} color="var(--text-secondary)" />
-              {entries.length > 0 && <InfoRow icon="schedule" label="Last payment" value={formatDate(entries[0].date)} color="var(--text-secondary)" />}
-            </div>
-          </div>
-        )}
-
-        {activeSection === 'entries' && (
-          <div className="card">
-            {entries.length === 0 ? (
-              <div className="empty-state">
-                <span className="material-symbols-rounded" style={{ fontSize: 44, color: 'var(--text-dim)', fontVariationSettings: "'FILL' 1" }}>receipt_long</span>
-                <div style={{ fontWeight: 600 }}>No payments yet</div>
-              </div>
-            ) : entries.map((e, i) => (
-              <div key={e._id} style={{ padding: '14px 16px', borderBottom: i < entries.length - 1 ? '1px solid var(--border)' : 'none' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: e.note ? 4 : 0 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <div style={{ width: 36, height: 36, borderRadius: 10, background: e.type === 'interest' ? 'var(--accent-violet-dim)' : 'var(--accent-emerald-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <span className="material-symbols-rounded" style={{ fontSize: 18, color: e.type === 'interest' ? 'var(--accent-violet)' : 'var(--accent-emerald)', fontVariationSettings: "'FILL' 1" }}>
-                        {e.type === 'interest' ? 'percent' : 'payments'}
-                      </span>
-                    </div>
-                    <div>
-                      <div style={{ fontSize: 14, fontWeight: 600 }}>{e.type === 'interest' ? 'Interest' : 'Payment'}</div>
-                      <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{formatDate(e.date)} • {formatTime(e.date)}</div>
-                    </div>
+                {c.alternatePhone && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span className="material-symbols-rounded" style={{ fontSize: 14, color: 'var(--text-muted)', fontVariationSettings: "'FILL' 1" }}>phone_forwarded</span>
+                    <a
+                      href={`tel:+91${c.alternatePhone}`}
+                      style={{ fontSize: 13, color: 'var(--accent-gold)', textDecoration: 'none' }}
+                    >{c.alternatePhone}</a>
                   </div>
-                  <div style={{ fontFamily: 'var(--font-display)', fontSize: 16, fontWeight: 700, color: 'var(--accent-emerald)' }}>+{formatCurrency(e.amount)}</div>
+                )}
+                <div style={{ marginTop: 8 }}>
+                  <span className={`badge badge-${c.status}`}>{c.status}</span>
                 </div>
-                {e.note && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginLeft: 46 }}>{e.note}</div>}
               </div>
-            ))}
-          </div>
-        )}
+            </div>
 
-        {/* Action buttons */}
-        {c.status === 'active' && (
-          <button className="btn btn-primary btn-full" onClick={() => setShowPaySheet(true)} style={{ height: 56, fontSize: 16, marginTop: 4 }}>
-            <span className="material-symbols-rounded" style={{ fontSize: 22, fontVariationSettings: "'FILL' 1" }}>add_circle</span>
-            Record Payment
-          </button>
-        )}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 16 }}>
+              <MiniStat label="Given" value={formatCurrency(c.inhandAmount || c.amount)} color={catColor} />
+              <MiniStat label="Collected" value={formatCurrency(c.paidAmount)} color="var(--accent-emerald)" />
+              <MiniStat label="Remaining" value={formatCurrency(c.remainingAmount)} color={c.remainingAmount > 0 ? 'var(--accent-rose)' : 'var(--text-muted)'} />
+            </div>
 
-        {c.status === 'closed' && (
-          <div style={{ textAlign: 'center', padding: '20px', background: 'var(--accent-emerald-dim)', borderRadius: 'var(--radius-lg)', border: '1px solid rgba(16,185,129,0.2)' }}>
-            <span className="material-symbols-rounded" style={{ fontSize: 36, color: 'var(--accent-emerald)', display: 'block', marginBottom: 8, fontVariationSettings: "'FILL' 1" }}>check_circle</span>
-            <div style={{ fontWeight: 700, color: 'var(--accent-emerald)', fontSize: 15 }}>Account Closed</div>
-            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>All payments completed</div>
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Repayment Progress</span>
+                <span style={{ fontSize: 13, fontWeight: 700, color: catColor }}>{Math.round(Math.min(progress, 100))}%</span>
+              </div>
+              <div className="progress-bar" style={{ height: 8 }}>
+                <div className="progress-fill" style={{ width: `${Math.min(progress, 100)}%`, background: `linear-gradient(90deg, ${catColor}, ${isFin ? '#60A5FA' : '#A78BFA'})` }} />
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6 }}>
+                <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Started {formatDate(c.startDate)}</span>
+                <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Total: {formatCurrency(totalExpected)}</span>
+              </div>
+            </div>
           </div>
-        )}
+
+          {/* Terms card */}
+          <div className="card" style={{ padding: 16 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 14 }}>
+              {isFin ? 'Finance Terms' : 'Vatti Terms'}
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {isFin ? (
+                <>
+                  <InfoRow icon="payments" label={`${c.paymentType} installment`} value={formatCurrency(c.installmentAmount)} color="var(--accent-blue)" />
+                  <InfoRow icon="format_list_numbered" label="Total installments" value={`${c.totalInstallments} payments`} color="var(--accent-blue)" />
+                  <InfoRow icon="trending_up" label="Your profit" value={formatCurrency(c.financeProfit)} color="var(--accent-gold)" />
+                </>
+              ) : (
+                <>
+                  <InfoRow icon="percent" label="Interest rate" value={`${c.interestRate}% per month`} color="var(--accent-violet)" />
+                  <InfoRow icon="payments" label="Monthly interest" value={formatCurrency(c.monthlyInterest)} color="var(--accent-violet)" />
+                  <InfoRow icon="account_balance_wallet" label="Principal amount" value={formatCurrency(c.amount)} color="var(--accent-gold)" />
+                  <InfoRow icon="hourglass_bottom" label="Remaining principal" value={formatCurrency(c.remainingAmount)} color={c.remainingAmount > 0 ? 'var(--accent-rose)' : 'var(--accent-emerald)'} />
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* Action button */}
+          {c.status === 'active' && (
+            <button className="btn btn-primary btn-full" onClick={() => setShowPaySheet(true)} style={{ height: 56, fontSize: 16 }}>
+              <span className="material-symbols-rounded" style={{ fontSize: 22, fontVariationSettings: "'FILL' 1" }}>add_circle</span>
+              Record Payment
+            </button>
+          )}
+
+          {c.status === 'closed' && (
+            <div style={{ textAlign: 'center', padding: '20px', background: 'var(--accent-emerald-dim)', borderRadius: 'var(--radius-lg)', border: '1px solid rgba(16,185,129,0.2)' }}>
+              <span className="material-symbols-rounded" style={{ fontSize: 36, color: 'var(--accent-emerald)', display: 'block', marginBottom: 8, fontVariationSettings: "'FILL' 1" }}>check_circle</span>
+              <div style={{ fontWeight: 700, color: 'var(--accent-emerald)', fontSize: 15 }}>Account Closed</div>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>All payments completed</div>
+            </div>
+          )}
+        </div>
+
+        {/* Right Side: Navigation Tabs and Transaction Entries Ledger */}
+        <div className="flex-1 w-full flex flex-col gap-4">
+          <div className="tabs">
+            <button className={`tab ${activeSection === 'overview' ? 'active' : ''}`} onClick={() => setActiveSection('overview')}>Overview</button>
+            <button className={`tab ${activeSection === 'entries' ? 'active' : ''}`} onClick={() => setActiveSection('entries')}>
+              Entries {entries.length > 0 && `(${entries.length})`}
+            </button>
+          </div>
+
+          {activeSection === 'overview' && (
+            <div className="card" style={{ padding: 16 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 14 }}>Account Information</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <InfoRow icon="calendar_today" label="Account opened" value={formatDate(c.startDate)} color="var(--text-secondary)" />
+                <InfoRow icon="payments" label="Payment frequency" value={c.paymentType.charAt(0).toUpperCase() + c.paymentType.slice(1)} color="var(--text-secondary)" />
+                <InfoRow icon="receipt_long" label="Total entries" value={`${entries.length} payments`} color="var(--text-secondary)" />
+                {entries.length > 0 && <InfoRow icon="schedule" label="Last payment" value={formatDate(entries[0].date)} color="var(--text-secondary)" />}
+              </div>
+            </div>
+          )}
+
+          {activeSection === 'entries' && (
+            <div className="card">
+              {entries.length === 0 ? (
+                <div className="empty-state">
+                  <span className="material-symbols-rounded" style={{ fontSize: 44, color: 'var(--text-dim)', fontVariationSettings: "'FILL' 1" }}>receipt_long</span>
+                  <div style={{ fontWeight: 600 }}>No payments yet</div>
+                </div>
+              ) : entries.map((e, i) => (
+                <div key={e._id} style={{ padding: '14px 16px', borderBottom: i < entries.length - 1 ? '1px solid var(--border)' : 'none' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                      <div style={{
+                        width: 34, height: 34, borderRadius: 10,
+                        background: e.type === 'interest' ? 'var(--accent-violet-dim)' : 'var(--accent-emerald-dim)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      }}>
+                        <span className="material-symbols-rounded" style={{ fontSize: 18, color: e.type === 'interest' ? 'var(--accent-violet)' : 'var(--accent-emerald)', fontVariationSettings: "'FILL' 1" }}>
+                          {e.type === 'interest' ? 'percent' : 'payments'}
+                        </span>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>
+                          {e.type === 'interest' ? 'Interest Payment' : 'Repayment'}
+                        </div>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{formatDate(e.date)} • {formatTime(e.date)}</div>
+                      </div>
+                    </div>
+                    <div style={{ fontFamily: 'var(--font-display)', fontSize: 16, fontWeight: 700, color: 'var(--accent-emerald)' }}>+{formatCurrency(e.amount)}</div>
+                  </div>
+                  {e.note && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginLeft: 46 }}>{e.note}</div>}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
-      {showPaySheet && <PaymentSheet customer={c} onClose={() => setShowPaySheet(false)} onSuccess={() => { setShowPaySheet(false); load(); }} />}
+      {showPaySheet && <PaymentSheet customer={c} onClose={() => setShowPaySheet(false)} onSuccess={() => { setShowPaySheet(false); showToast(setToast, 'Payment recorded successfully!', 'success'); load(); }} />}
       {showEditSheet && <EditSheet customer={c} onClose={() => setShowEditSheet(false)} onSuccess={() => { setShowEditSheet(false); load(); }} />}
       {showDeleteSheet && <DeleteSheet customer={c} onClose={() => setShowDeleteSheet(false)} onSuccess={() => navigate('/')} />}
+      <Toast toast={toast} onDismiss={() => setToast(null)} />
     </div>
   );
 }

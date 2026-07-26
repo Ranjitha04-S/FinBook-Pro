@@ -21,44 +21,64 @@ export default function Home() {
   const [stats, setStats] = useState(null);
   const [chartData, setChartData] = useState([]);
   const [customers, setCustomers] = useState([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
   const [activeTab, setActiveTab] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [notifCount, setNotifCount] = useState(0);
   const navigate = useNavigate();
   const { logout } = useAuth();
 
-  const load = useCallback(async () => {
+  // ── Load dashboard stats + notifications (once) ──────────────────────────
+  const loadStats = useCallback(async () => {
     try {
-      const [statsRes, chartRes, custRes, notifRes] = await Promise.all([
+      const [statsRes, chartRes, notifRes] = await Promise.all([
         api.get('/dashboard/stats'),
         api.get('/dashboard/monthly-chart'),
-        api.get('/customers'),
         api.get('/notifications'),
       ]);
       setStats(statsRes.data);
       setChartData(chartRes.data);
-      setCustomers(custRes.data);
       setNotifCount(notifRes.data.filter(n => !n.isChecked).length);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
+    } catch (err) { console.error(err); }
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  // ── Load customers (re-runs on search / tab / page change) ───────────────
+  const loadCustomers = useCallback(async (search, category, pg, append = false) => {
+    if (!append) setLoading(true);
+    else setLoadingMore(true);
+    try {
+      const params = new URLSearchParams({ page: pg, limit: 20 });
+      if (search.trim()) params.set('search', search.trim());
+      if (category !== 'all') params.set('category', category);
+      const res = await api.get(`/customers?${params}`);
+      const { customers: list, total: t } = res.data;
+      setCustomers(prev => append ? [...prev, ...list] : list);
+      setTotal(t);
+    } catch (err) { console.error(err); }
+    finally { setLoading(false); setLoadingMore(false); }
+  }, []);
 
-  const filteredCustomers = customers.filter(c => {
-    const matchTab = activeTab === 'all' || c.category === activeTab;
-    const q = searchQuery.toLowerCase().trim();
-    const matchSearch = !q ||
-      c.name.toLowerCase().includes(q) ||
-      c.phone.includes(q) ||
-      (c.alternatePhone && c.alternatePhone.includes(q));
-    return matchTab && matchSearch;
-  });
+  // ── Debounced search ──────────────────────────────────────────────────────
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setPage(1);
+      loadCustomers(searchQuery, activeTab, 1, false);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery, activeTab, loadCustomers]);
 
+  useEffect(() => { loadStats(); }, [loadStats]);
+
+  const handleLoadMore = () => {
+    const next = page + 1;
+    setPage(next);
+    loadCustomers(searchQuery, activeTab, next, true);
+  };
+
+  const hasMore = customers.length < total;
   const todayStr = new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' });
 
   return (
@@ -80,10 +100,10 @@ export default function Home() {
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               boxShadow: '0 4px 12px rgba(245,158,11,0.3)',
             }}>
-              <span style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 800, color: '#0F172A' }}>SR</span>
+              <span style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 800, color: '#0F172A' }}>FB</span>
             </div>
             <div>
-              <div style={{ fontFamily: 'var(--font-display)', fontSize: 16, fontWeight: 700 }}>SR Finance</div>
+              <div style={{ fontFamily: 'var(--font-display)', fontSize: 16, fontWeight: 700 }}>FinBook Pro</div>
               <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{todayStr}</div>
             </div>
           </div>
@@ -106,141 +126,144 @@ export default function Home() {
         </div>
       </div>
 
-      <div style={{ padding: '20px 16px', display: 'flex', flexDirection: 'column', gap: 20 }}>
-
-        {/* Hero stat */}
-        <div style={{
-          background: 'linear-gradient(135deg, #1E293B 0%, #253347 100%)',
-          borderRadius: 'var(--radius-xl)',
-          padding: '24px 20px',
-          border: '1px solid var(--border)',
-          position: 'relative',
-          overflow: 'hidden',
-        }}>
+      <div className="p-4 md:p-6 flex flex-col lg:flex-row gap-6 max-w-7xl mx-auto w-full items-start">
+        
+        {/* Left side: Stats & Chart */}
+        <div className="flex-1 flex flex-col gap-5 w-full lg:max-w-[calc(100%-416px)]">
+          {/* Hero stat */}
           <div style={{
-            position: 'absolute', right: -20, top: -20,
-            width: 120, height: 120, borderRadius: '50%',
-            background: 'radial-gradient(circle, rgba(245,158,11,0.12) 0%, transparent 70%)',
-          }} />
-          <div style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 6 }}>Today's Collection</div>
-          <div style={{ fontFamily: 'var(--font-display)', fontSize: 36, fontWeight: 800, color: 'var(--accent-gold)', lineHeight: 1.1 }}>
-            {loading ? '—' : formatCurrency(stats?.todayCollection)}
-          </div>
-          <div style={{ display: 'flex', gap: 20, marginTop: 16 }}>
-            <div>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 2 }}>New Accounts</div>
-              <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 18, color: 'var(--text-primary)' }}>
-                {loading ? '—' : stats?.todayNewAccounts}
-              </div>
+            background: 'linear-gradient(135deg, #1E293B 0%, #253347 100%)',
+            borderRadius: 'var(--radius-xl)',
+            padding: '24px 20px',
+            border: '1px solid var(--border)',
+            position: 'relative',
+            overflow: 'hidden',
+          }}>
+            <div style={{
+              position: 'absolute', right: -20, top: -20,
+              width: 120, height: 120, borderRadius: '50%',
+              background: 'radial-gradient(circle, rgba(245,158,11,0.12) 0%, transparent 70%)',
+            }} />
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 6 }}>Today's Collection</div>
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: 36, fontWeight: 800, color: 'var(--accent-gold)', lineHeight: 1.1 }}>
+              {loading ? '—' : formatCurrency(stats?.todayCollection)}
             </div>
-            <div style={{ width: 1, background: 'var(--border)' }} />
-            <div>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 2 }}>Active Accounts</div>
-              <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 18, color: 'var(--accent-emerald)' }}>
-                {loading ? '—' : stats?.activeCustomers}
-              </div>
-            </div>
-            <div style={{ width: 1, background: 'var(--border)' }} />
-            <div>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 2 }}>Closed</div>
-              <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 18, color: 'var(--text-secondary)' }}>
-                {loading ? '—' : stats?.closedCustomers}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Stats grid */}
-        <div className="stats-row">
-          <div className="stat-card">
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-              <div style={{ width: 32, height: 32, borderRadius: 10, background: 'var(--accent-blue-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <span className="material-symbols-rounded" style={{ fontSize: 18, color: 'var(--accent-blue)', fontVariationSettings: "'FILL' 1" }}>trending_up</span>
-              </div>
-              <span className="label">Weekly</span>
-            </div>
-            <div className="stat-value" style={{ color: 'var(--accent-blue)' }}>{loading ? '—' : formatCurrency(stats?.weekCollection)}</div>
-            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>collected this week</div>
-          </div>
-          <div className="stat-card">
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-              <div style={{ width: 32, height: 32, borderRadius: 10, background: 'var(--accent-emerald-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <span className="material-symbols-rounded" style={{ fontSize: 18, color: 'var(--accent-emerald)', fontVariationSettings: "'FILL' 1" }}>calendar_month</span>
-              </div>
-              <span className="label">Monthly</span>
-            </div>
-            <div className="stat-value" style={{ color: 'var(--accent-emerald)' }}>{loading ? '—' : formatCurrency(stats?.monthCollection)}</div>
-            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>collected this month</div>
-          </div>
-          <div className="stat-card">
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-              <div style={{ width: 32, height: 32, borderRadius: 10, background: 'var(--accent-rose-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <span className="material-symbols-rounded" style={{ fontSize: 18, color: 'var(--accent-rose)', fontVariationSettings: "'FILL' 1" }}>account_balance_wallet</span>
-              </div>
-              <span className="label">Invested</span>
-            </div>
-            <div className="stat-value" style={{ color: 'var(--accent-rose)' }}>{loading ? '—' : formatCurrency(stats?.totalInvested)}</div>
-            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>total deployed</div>
-          </div>
-          <div className="stat-card">
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-              <div style={{ width: 32, height: 32, borderRadius: 10, background: 'var(--accent-violet-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <span className="material-symbols-rounded" style={{ fontSize: 18, color: 'var(--accent-violet)', fontVariationSettings: "'FILL' 1" }}>people</span>
-              </div>
-              <span className="label">Pending</span>
-            </div>
-            <div className="stat-value" style={{ color: 'var(--accent-violet)' }}>{loading ? '—' : notifCount}</div>
-            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>due collections</div>
-          </div>
-        </div>
-
-        {/* Chart */}
-        {chartData.length > 0 && (
-          <div className="card" style={{ padding: '20px 16px 8px' }}>
-            <div className="section-header">
+            <div style={{ display: 'flex', gap: 20, marginTop: 16 }}>
               <div>
-                <h3 style={{ fontSize: 14 }}>Collection vs Investment</h3>
-                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>Last 6 months</div>
-              </div>
-              <div style={{ display: 'flex', gap: 12 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                  <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#3B82F6' }} />
-                  <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>Collected</span>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 2 }}>New Accounts</div>
+                <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 18, color: 'var(--text-primary)' }}>
+                  {loading ? '—' : stats?.todayNewAccounts}
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                  <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#8B5CF6' }} />
-                  <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>Invested</span>
+              </div>
+              <div style={{ width: 1, background: 'var(--border)' }} />
+              <div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 2 }}>Active Accounts</div>
+                <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 18, color: 'var(--accent-emerald)' }}>
+                  {loading ? '—' : stats?.activeCustomers}
+                </div>
+              </div>
+              <div style={{ width: 1, background: 'var(--border)' }} />
+              <div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 2 }}>Closed</div>
+                <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 18, color: 'var(--text-secondary)' }}>
+                  {loading ? '—' : stats?.closedCustomers}
                 </div>
               </div>
             </div>
-            <ResponsiveContainer width="100%" height={160}>
-              <AreaChart data={chartData} margin={{ top: 0, right: 0, left: -30, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="coll" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.25} />
-                    <stop offset="95%" stopColor="#3B82F6" stopOpacity={0} />
-                  </linearGradient>
-                  <linearGradient id="inv" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#8B5CF6" stopOpacity={0.25} />
-                    <stop offset="95%" stopColor="#8B5CF6" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <XAxis dataKey="label" tick={{ fill: '#475569', fontSize: 11 }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fill: '#475569', fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={v => `${v/1000}k`} />
-                <Tooltip content={<CustomTooltip />} />
-                <Area type="monotone" dataKey="collection" stroke="#3B82F6" strokeWidth={2} fill="url(#coll)" dot={false} />
-                <Area type="monotone" dataKey="investment" stroke="#8B5CF6" strokeWidth={2} fill="url(#inv)" dot={false} />
-              </AreaChart>
-            </ResponsiveContainer>
           </div>
-        )}
 
-        {/* Customer list */}
-        <div>
+          {/* Stats grid */}
+          <div className="stats-row">
+            <div className="stat-card">
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                <div style={{ width: 32, height: 32, borderRadius: 10, background: 'var(--accent-blue-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <span className="material-symbols-rounded" style={{ fontSize: 18, color: 'var(--accent-blue)', fontVariationSettings: "'FILL' 1" }}>trending_up</span>
+                </div>
+                <span className="label">Weekly</span>
+              </div>
+              <div className="stat-value" style={{ color: 'var(--accent-blue)' }}>{loading ? '—' : formatCurrency(stats?.weekCollection)}</div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>collected this week</div>
+            </div>
+            <div className="stat-card">
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                <div style={{ width: 32, height: 32, borderRadius: 10, background: 'var(--accent-emerald-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <span className="material-symbols-rounded" style={{ fontSize: 18, color: 'var(--accent-emerald)', fontVariationSettings: "'FILL' 1" }}>calendar_month</span>
+                </div>
+                <span className="label">Monthly</span>
+              </div>
+              <div className="stat-value" style={{ color: 'var(--accent-emerald)' }}>{loading ? '—' : formatCurrency(stats?.monthCollection)}</div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>collected this month</div>
+            </div>
+            <div className="stat-card">
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                <div style={{ width: 32, height: 32, borderRadius: 10, background: 'var(--accent-rose-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <span className="material-symbols-rounded" style={{ fontSize: 18, color: 'var(--accent-rose)', fontVariationSettings: "'FILL' 1" }}>account_balance_wallet</span>
+                </div>
+                <span className="label">Invested</span>
+              </div>
+              <div className="stat-value" style={{ color: 'var(--accent-rose)' }}>{loading ? '—' : formatCurrency(stats?.totalInvested)}</div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>total deployed</div>
+            </div>
+            <div className="stat-card">
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                <div style={{ width: 32, height: 32, borderRadius: 10, background: 'var(--accent-violet-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <span className="material-symbols-rounded" style={{ fontSize: 18, color: 'var(--accent-violet)', fontVariationSettings: "'FILL' 1" }}>people</span>
+                </div>
+                <span className="label">Pending</span>
+              </div>
+              <div className="stat-value" style={{ color: 'var(--accent-violet)' }}>{loading ? '—' : notifCount}</div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>due collections</div>
+            </div>
+          </div>
+
+          {/* Chart */}
+          {chartData.length > 0 && (
+            <div className="card" style={{ padding: '20px 16px 8px' }}>
+              <div className="section-header">
+                <div>
+                  <h3 style={{ fontSize: 14 }}>Collection vs Investment</h3>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>Last 6 months</div>
+                </div>
+                <div style={{ display: 'flex', gap: 12 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                    <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#3B82F6' }} />
+                    <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>Collected</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                    <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#8B5CF6' }} />
+                    <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>Invested</span>
+                  </div>
+                </div>
+              </div>
+              <ResponsiveContainer width="100%" height={240}>
+                <AreaChart data={chartData} margin={{ top: 0, right: 0, left: -30, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="coll" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.25} />
+                      <stop offset="95%" stopColor="#3B82F6" stopOpacity={0} />
+                    </linearGradient>
+                    <linearGradient id="inv" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#8B5CF6" stopOpacity={0.25} />
+                      <stop offset="95%" stopColor="#8B5CF6" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <XAxis dataKey="label" tick={{ fill: '#475569', fontSize: 11 }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fill: '#475569', fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={v => `${v/1000}k`} />
+                  <Tooltip content={<CustomTooltip />} />
+                  <Area type="monotone" dataKey="collection" stroke="#3B82F6" strokeWidth={2} fill="url(#coll)" dot={false} />
+                  <Area type="monotone" dataKey="investment" stroke="#8B5CF6" strokeWidth={2} fill="url(#inv)" dot={false} />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </div>
+
+        {/* Right side: Search & Customer list */}
+        <div className="w-full lg:w-96 shrink-0">
           <div className="section-header">
             <h3>Customers</h3>
             <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-              {searchQuery ? `${filteredCustomers.length} found` : `${filteredCustomers.length} accounts`}
+              {searchQuery ? `${total} found` : `${total} accounts`}
             </span>
           </div>
 
@@ -303,7 +326,7 @@ export default function Home() {
                   </div>
                 </div>
               ))
-            ) : filteredCustomers.length === 0 ? (
+            ) : customers.length === 0 ? (
               <div className="empty-state">
                 <span className="material-symbols-rounded" style={{ fontSize: 48, color: 'var(--text-dim)', fontVariationSettings: "'FILL' 1" }}>person_search</span>
                 <div style={{ fontWeight: 600 }}>
@@ -318,10 +341,29 @@ export default function Home() {
                   </button>
                 )}
               </div>
-            ) : filteredCustomers.map(c => (
+            ) : customers.map(c => (
               <CustomerListItem key={c._id} customer={c} onClick={() => navigate(`/customer/${c._id}`)} />
             ))}
           </div>
+
+          {/* Load more */}
+          {hasMore && !loading && (
+            <button
+              className="btn btn-secondary btn-full"
+              onClick={handleLoadMore}
+              disabled={loadingMore}
+              style={{ marginTop: 12, height: 48, fontSize: 14 }}
+            >
+              {loadingMore ? (
+                'Loading...'
+              ) : (
+                <>
+                  <span className="material-symbols-rounded" style={{ fontSize: 18 }}>expand_more</span>
+                  Load more ({total - customers.length} remaining)
+                </>
+              )}
+            </button>
+          )}
         </div>
       </div>
     </div>

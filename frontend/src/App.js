@@ -16,7 +16,7 @@ function AppRoutes() {
 
   if (loading) return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', flexDirection: 'column', gap: 16 }}>
-      <div style={{ fontFamily: 'var(--font-display)', fontSize: 28, fontWeight: 800, color: 'var(--accent-gold)' }}>SR Finance</div>
+      <div style={{ fontFamily: 'var(--font-display)', fontSize: 28, fontWeight: 800, color: 'var(--accent-gold)' }}>FinBook Pro</div>
       <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>Loading...</div>
     </div>
   );
@@ -30,15 +30,17 @@ function AppRoutes() {
 
   return (
     <>
-      <Routes>
-        <Route path="/" element={<Home />} />
-        <Route path="/new-customer" element={<NewCustomer />} />
-        <Route path="/customer/:id" element={<CustomerProfile />} />
-        <Route path="/notifications" element={<Notifications />} />
-        <Route path="/calendar" element={<Calendar />} />
-        <Route path="*" element={<Navigate to="/" />} />
-      </Routes>
       <NavBar />
+      <main className="flex-1 min-w-0 h-full relative overflow-hidden flex flex-col">
+        <Routes>
+          <Route path="/" element={<Home />} />
+          <Route path="/new-customer" element={<NewCustomer />} />
+          <Route path="/customer/:id" element={<CustomerProfile />} />
+          <Route path="/notifications" element={<Notifications />} />
+          <Route path="/calendar" element={<Calendar />} />
+          <Route path="*" element={<Navigate to="/" />} />
+        </Routes>
+      </main>
     </>
   );
 }

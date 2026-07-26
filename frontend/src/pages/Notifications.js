@@ -20,6 +20,16 @@ export default function Notifications() {
 
   useEffect(() => { setLoading(true); load(); }, [load]);
 
+  // Toggle isChecked — persists to DB, shows strikethrough immediately
+  const handleCheck = async (notifId) => {
+    try {
+      const res = await api.patch(`/notifications/${notifId}/check`);
+      setNotifications(prev =>
+        prev.map(n => n._id === notifId ? { ...n, isChecked: res.data.isChecked } : n)
+      );
+    } catch (err) { console.error('Check toggle failed', err); }
+  };
+
   // Tap arrow → visit customer page (no strikethrough yet)
   const handleVisit = async (notif) => {
     try { await api.patch(`/notifications/${notif._id}/visit`); } catch {}
@@ -45,14 +55,12 @@ export default function Notifications() {
         )}
       />
 
-      <div style={{ padding: '16px 16px 0' }}>
-        <div className="tabs" style={{ marginBottom: 16 }}>
+      <div className="max-w-3xl mx-auto w-full p-4 md:p-6 flex flex-col gap-4">
+        <div className="tabs">
           <button className={`tab ${activeFilter === 'today' ? 'active' : ''}`} onClick={() => setActiveFilter('today')}>Today's Due</button>
           <button className={`tab ${activeFilter === 'upcoming' ? 'active' : ''}`} onClick={() => setActiveFilter('upcoming')}>Upcoming</button>
         </div>
-      </div>
 
-      <div style={{ padding: '0 16px', display: 'flex', flexDirection: 'column', gap: 16 }}>
         <div style={{ background: 'var(--accent-blue-dim)', border: '1px solid rgba(59,130,246,0.2)', borderRadius: 'var(--radius-md)', padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 10 }}>
           <span className="material-symbols-rounded" style={{ fontSize: 18, color: 'var(--accent-blue)', fontVariationSettings: "'FILL' 1", flexShrink: 0 }}>info</span>
           <span style={{ fontSize: 12, color: 'var(--accent-blue)', lineHeight: 1.5 }}>
@@ -88,12 +96,27 @@ export default function Notifications() {
                 <div className="card">
                   {pending.map((n, i) => (
                     <div key={n._id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', borderBottom: i < pending.length - 1 ? '1px solid var(--border)' : 'none' }}>
-                      <div style={{ width: 24, height: 24, borderRadius: 7, border: `2px solid ${typeColor(n.type)}`, flexShrink: 0 }} />
+                      {/* Clickable checkbox square — tap to strikethrough */}
+                      <div
+                        onClick={() => handleCheck(n._id)}
+                        title={n.isChecked ? 'Uncheck' : 'Mark as checked'}
+                        style={{
+                          width: 24, height: 24, borderRadius: 7, flexShrink: 0, cursor: 'pointer',
+                          border: n.isChecked ? 'none' : `2px solid ${typeColor(n.type)}`,
+                          background: n.isChecked ? typeColor(n.type) : 'transparent',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          transition: 'all 0.15s ease',
+                        }}
+                      >
+                        {n.isChecked && (
+                          <span className="material-symbols-rounded" style={{ fontSize: 14, color: '#0F172A', fontVariationSettings: "'FILL' 1" }}>check</span>
+                        )}
+                      </div>
                       <div className={`avatar ${n.category === 'finance' ? 'avatar-blue' : 'avatar-violet'}`} style={{ width: 40, height: 40, fontSize: 14 }}>
                         {getInitials(n.customer?.name)}
                       </div>
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontWeight: 600, fontSize: 15, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 4 }}>{n.customer?.name}</div>
+                        <div style={{ fontWeight: 600, fontSize: 15, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 4, textDecoration: n.isChecked ? 'line-through' : 'none', opacity: n.isChecked ? 0.6 : 1 }}>{n.customer?.name}</div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                           <span className={`badge badge-${n.category}`}>{n.category}</span>
                           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 11, color: typeColor(n.type), fontWeight: 600 }}>

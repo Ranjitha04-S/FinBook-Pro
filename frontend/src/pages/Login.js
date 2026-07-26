@@ -52,9 +52,9 @@ export default function Login() {
           margin: '0 auto 20px',
           boxShadow: '0 8px 32px rgba(245,158,11,0.35)',
         }}>
-          <span style={{ fontFamily: 'var(--font-display)', fontSize: 28, fontWeight: 800, color: '#0F172A' }}>SR</span>
+          <span style={{ fontFamily: 'var(--font-display)', fontSize: 28, fontWeight: 800, color: '#0F172A' }}>FB</span>
         </div>
-        <h1 style={{ fontSize: 30, color: 'var(--text-primary)', marginBottom: 6 }}>SR Finance</h1>
+        <h1 style={{ fontSize: 30, color: 'var(--text-primary)', marginBottom: 6 }}>FinBook Pro</h1>
         <p style={{ color: 'var(--text-secondary)', fontSize: 14 }}>Secure management portal</p>
       </div>
 
@@ -119,7 +119,7 @@ export default function Login() {
       </form>
 
       <p style={{ position: 'absolute', bottom: 32, color: 'var(--text-muted)', fontSize: 12 }}>
-        SR Finance Management System
+        FinBook Pro — Financial Management System
       </p>
     </div>
   );

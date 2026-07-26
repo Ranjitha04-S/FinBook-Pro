@@ -45,4 +45,18 @@ router.patch('/:id/visit', async (req, res) => {
   }
 });
 
+// PATCH — toggle isChecked (manual checkbox strikethrough)
+// Persists the checked state to DB so it survives a page refresh.
+router.patch('/:id/check', async (req, res) => {
+  try {
+    const notif = await Notification.findById(req.params.id);
+    if (!notif) return res.status(404).json({ message: 'Notification not found' });
+    notif.isChecked = !notif.isChecked;
+    await notif.save();
+    res.json({ isChecked: notif.isChecked });
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
 module.exports = router;
